@@ -40,6 +40,7 @@ KNOWN_COUNTS = {
     ("qwen3.8-27b", "groupwise-int"): (1124, 1190),
     ("qwen3.8-27b", "nvfp4"): (1124, 1190),
     ("qwen3.6-35b-a3b", "groupwise-int"): (940,),
+    ("qwen3.5-9b", "groupwise-int"): (740,),
 }
 LIMIT = 32_000_000_000
 HEADER = struct.Struct("<8sQ16s")
@@ -55,12 +56,14 @@ def f32(value):
     return struct.unpack("<f", struct.pack("<f", value))[0]
 
 
-def text_config(moe):
-    layers = 40 if moe else 64
+def text_config(target):
+    moe = target == "qwen3.6-35b-a3b"
+    small = target == "qwen3.5-9b"
+    layers = 40 if moe else (32 if small else 64)
     result = {
         "architectures": ["Qwen3_5MoeForCausalLM" if moe else "Qwen3_5ForCausalLM"],
         "model_type": "qwen3_5_moe_text" if moe else "qwen3_5_text",
-        "hidden_size": 2048 if moe else 5120,
+        "hidden_size": 2048 if moe else (4096 if small else 5120),
         "vocab_size": 248320,
         "tie_word_embeddings": False,
         "num_hidden_layers": layers,
@@ -70,7 +73,7 @@ def text_config(moe):
         ],
         "max_position_embeddings": 262144,
         "rms_norm_eps": f32(1e-6),
-        "num_attention_heads": 16 if moe else 24,
+        "num_attention_heads": 16 if moe else (16 if small else 24),
         "num_key_value_heads": 2 if moe else 4,
         "head_dim": 256,
         "rope_parameters": {
@@ -80,7 +83,7 @@ def text_config(moe):
         },
         "linear_num_key_heads": 16,
         "linear_key_head_dim": 128,
-        "linear_num_value_heads": 32 if moe else 48,
+        "linear_num_value_heads": 32 if (moe or small) else 48,
         "linear_value_head_dim": 128,
         "linear_conv_kernel_dim": 4,
     }
@@ -92,7 +95,7 @@ def text_config(moe):
             shared_expert_intermediate_size=512,
         )
     else:
-        result["intermediate_size"] = 17408
+        result["intermediate_size"] = 12288 if small else 17408
     return result
 
 
@@ -266,7 +269,7 @@ def make_directory(identity, old_objects):
         raise ValueError(f"unsupported v2 input {key} with {len(old_objects)} objects")
     moe = key[0] == "qwen3.6-35b-a3b"
     has_dflash2 = any(o["name"].startswith("dflash2/") for o in old_objects)
-    text = text_config(moe)
+    text = text_config(key[0])
     components = {
         "text": {
             "config": text,
@@ -480,9 +483,10 @@ def make_directory(identity, old_objects):
                 )
                 put(block + role, obj, shape)
             elif role == "mlp/gate_up" and not moe:
-                split(obj, [(block + "mlp/gate", 17408), (block + "mlp/up", 17408)], h)
+                inter = text["intermediate_size"]
+                split(obj, [(block + "mlp/gate", inter), (block + "mlp/up", inter)], h)
             elif role == "mlp/down" and not moe:
-                put(block + role, obj, (h, 17408))
+                put(block + role, obj, (h, text["intermediate_size"]))
             elif role.startswith("moe/") and moe:
                 prefix = block + "moe/"
                 if role == "moe/router_shared_gate":
@@ -673,6 +677,8 @@ def make_directory(identity, old_objects):
     if scalar_uses.keys() - bindings.keys():
         raise ValueError("activation scalar refers to an absent logical projection")
     expected_bindings = 32713 if moe else 1513 if has_dflash2 else 1422
+    if key[0] == "qwen3.5-9b":
+        expected_bindings = 942
     if len(bindings) != expected_bindings:
         raise ValueError("the known logical parameter mapping is incomplete")
     for component, required in (
