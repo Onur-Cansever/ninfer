@@ -86,8 +86,12 @@ void launch_q4_by_columns(const Tensor& x, const Weight& weight, Tensor& out, cu
     case 12:
         launch_q4_sliced_exact<Hidden, 12>(x, weight, out, stream);
         break;
+    default:
+        // Prefill-scale token counts: chunk through the sliced-K kernel at
+        // 16 tokens per launch (the launcher slices internally).
+        launch_q4_sliced_exact<Hidden, 16>(x, weight, out, stream);
+        break;
     }
-    throw std::logic_error("GDN independent Q4 projection: invalid selected extent");
 }
 
 template <int ValueRows>
@@ -168,8 +172,12 @@ void launch_q5_by_columns(const Tensor& x, const Weight& weight, Tensor& value, 
     case 12:
         launch_q5_simt_cols<4, ValueRows>(x, weight, value, z, stream);
         break;
+    default:
+        // Prefill-scale token counts: chunk through the SIMT kernel at 8
+        // tokens per launch (the launcher slices internally).
+        launch_q5_simt_cols<8, ValueRows>(x, weight, value, z, stream);
+        break;
     }
-    throw std::logic_error("GDN independent Q5 projection: invalid selected extent");
 }
 
 template <int Hidden, int ValueRows>
