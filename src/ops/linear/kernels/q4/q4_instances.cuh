@@ -12,6 +12,10 @@ using GemvR1W8K5120 =
     Q4A16GemvSchedule<1, 8, 16, 1, Q4GemvActivationAccess::Direct, Q4GemvLaneMapping::PackedByte2,
                       Q4GemvDecodeMode::ScalarInteger, Q4GemvCodeTransfer::SyncVector16,
                       Q4GemvScaleAccess::Scalar16Shuffle, Cache::ca, 80, 1>;
+using GemvR1W8K4096 =
+    Q4A16GemvSchedule<1, 8, 16, 1, Q4GemvActivationAccess::Direct, Q4GemvLaneMapping::PackedByte2,
+                      Q4GemvDecodeMode::ScalarInteger, Q4GemvCodeTransfer::SyncVector16,
+                      Q4GemvScaleAccess::Scalar16Shuffle, Cache::ca, 64, 1>;
 
 using MmaR32T64K64Wr16Wt32S2A2B2 =
     Q4A16MmaSchedule<32, 64, 64, 16, 32, 2, 2, Q4MmaFragmentPipeline::Serial, Cache::cg, Cache::cg,

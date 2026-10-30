@@ -36,11 +36,11 @@ RowSplitGroupedMmaJob make_job(const Weight& weight, std::int32_t weight_row_off
 template <class Schedule>
 void launch_slice(bool full, const Tensor& x, const Weight& qk_weight, const Weight& value_z_weight,
                   Tensor& qkv, Tensor& z, cudaStream_t stream) {
-    constexpr std::int32_t kValueRows = 6144;
+    const std::int32_t value_rows = value_z_weight.n / 2;
     const RowSplitGroupedMmaJob qk    = make_job(qk_weight, 0, qk_weight.n, qkv, 0);
-    const RowSplitGroupedMmaJob value = make_job(value_z_weight, 0, kValueRows, qkv, qk_weight.n);
+    const RowSplitGroupedMmaJob value = make_job(value_z_weight, 0, value_rows, qkv, qk_weight.n);
     const RowSplitGroupedMmaJob output_gate =
-        make_job(value_z_weight, kValueRows, kValueRows, z, 0);
+        make_job(value_z_weight, value_rows, value_rows, z, 0);
     RowSplitGroupedMmaJob empty{};
     const int tiles = common::div_up(qk.n, Schedule::BM) + common::div_up(value.n, Schedule::BM) +
                       common::div_up(output_gate.n, Schedule::BM);

@@ -41,9 +41,17 @@ WeightProfile describe_profile(const ProjectionProfile& weights) {
         const auto& a = weights.first;
         const auto& b = *weights.second;
         if (a.qtype != QType::Q4_G64_FP16 || b.qtype != QType::Q5_G64_FP16 || a.n != 4096 ||
-            a.k != 5120 || b.n != 12288 || b.k != 5120)
+            a.k != b.k)
             throw std::invalid_argument("GDN input: unsupported paired weight geometry");
-        return {Format::Q4Q5, {5120, 6144}, LinearPolicy::A16Only};
+        if (a.k == 5120) {
+            if (b.n != 12288) throw std::invalid_argument("GDN input: unsupported paired weight geometry");
+            return {Format::Q4Q5, {5120, 6144}, LinearPolicy::A16Only};
+        }
+        if (a.k == 4096) {
+            if (b.n != 8192) throw std::invalid_argument("GDN input: unsupported paired weight geometry");
+            return {Format::Q4Q5, {4096, 4096}, LinearPolicy::A16Only};
+        }
+        throw std::invalid_argument("GDN input: unsupported paired weight geometry");
     }
     const auto& w = weights.first;
     if (!valid_linear_policy(w.policy))
