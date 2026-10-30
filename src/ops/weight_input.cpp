@@ -199,7 +199,8 @@ ProjectionWeights prepare_gdn_control_proj_weights(const WeightInput& a, const W
     require(shape == matrix(b) && (shape == std::vector<std::uint64_t>{48, 5120} ||
                                    shape == std::vector<std::uint64_t>{32, 2048} ||
                                    shape == std::vector<std::uint64_t>{48, 2560} ||
-                                   shape == std::vector<std::uint64_t>{24, 2560}),
+                                   shape == std::vector<std::uint64_t>{24, 2560} ||
+                                   shape == std::vector<std::uint64_t>{32, 4096}),
             "GDN control: unsupported A/B geometry");
     const std::array inputs{a, b};
     if (contiguous(concatenate_rows(inputs))) {
@@ -207,7 +208,8 @@ ProjectionWeights prepare_gdn_control_proj_weights(const WeightInput& a, const W
         require(result.weight.qtype == QType::BF16, "GDN control requires BF16 weights");
         return result;
     }
-    require(shape == std::vector<std::uint64_t>{48, 5120},
+    require(shape == std::vector<std::uint64_t>{48, 5120} ||
+                shape == std::vector<std::uint64_t>{32, 4096},
             "GDN control: this geometry requires a combined parent");
     const auto first  = prepare_linear_weight(a);
     const auto second = prepare_linear_weight(b);
