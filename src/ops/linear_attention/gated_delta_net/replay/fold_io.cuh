@@ -35,6 +35,7 @@ using FoldGeometry48x48 = FoldGeometry<48, 16, 48, 10240>;
 using FoldGeometry30x32 = FoldGeometry<30, 16, 32, 8192>;
 using FoldGeometry36x48 = FoldGeometry<36, 16, 48, 10240>;
 using FoldGeometry36x24 = FoldGeometry<36, 8, 24, 5120>;
+using FoldGeometry24x32 = FoldGeometry<24, 16, 32, 8192>;
 
 __device__ __forceinline__ GdnReplayFoldKernelRow fold_row(const GdnReplayFoldKernelRows& rows,
                                                            int b) {

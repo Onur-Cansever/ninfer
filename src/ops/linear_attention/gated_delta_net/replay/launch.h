@@ -10,7 +10,7 @@
 namespace ninfer::ops::detail::gated_delta_net {
 inline constexpr std::int32_t kMaximumReplayRows = 8;
 
-enum class FoldGeometryId { Layers48Heads48, Layers30Heads32, Layers36Heads48, Layers36Heads24 };
+enum class FoldGeometryId { Layers48Heads48, Layers30Heads32, Layers36Heads48, Layers36Heads24, Layers24Heads32 };
 
 inline FoldGeometryId select_fold_geometry(const GdnReplayRecordSpec& spec) {
     if (spec.qk_heads == 16 && spec.value_heads == 48 && spec.conv_channels == 10240) {
@@ -23,6 +23,9 @@ inline FoldGeometryId select_fold_geometry(const GdnReplayRecordSpec& spec) {
     if (spec.layers == 36 && spec.qk_heads == 8 && spec.value_heads == 24 &&
         spec.conv_channels == 5120)
         return FoldGeometryId::Layers36Heads24;
+    if (spec.layers == 24 && spec.qk_heads == 16 && spec.value_heads == 32 &&
+        spec.conv_channels == 8192)
+        return FoldGeometryId::Layers24Heads32;
     throw std::invalid_argument("gdn_replay_fold: unsupported record geometry");
 }
 
