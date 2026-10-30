@@ -32,6 +32,8 @@ using Q8N12288K4096  = Q8LinearGeometry<12288, 4096>;
 using Q8N12288K2560  = Q8LinearGeometry<12288, 2560>;
 using Q8N14336K5120  = Q8LinearGeometry<14336, 5120>;
 using Q8N16384K2560  = Q8LinearGeometry<16384, 2560>;
+using Q8N24576K4096  = Q8LinearGeometry<24576, 4096>;
+using Q8N4096K12288  = Q8LinearGeometry<4096, 12288>;
 using Q8N34816K5120  = Q8LinearGeometry<34816, 5120>;
 using Q8N248320K5120 = Q8LinearGeometry<248320, 5120>;
 using Q8N4096K8192   = Q8LinearGeometry<4096, 8192>;
@@ -65,6 +67,8 @@ using Q8N4096K8192   = Q8LinearGeometry<4096, 8192>;
 [[nodiscard]] Q8Launch select_q8_n14336_k5120(std::int32_t tokens);
 [[nodiscard]] Q8Launch select_q8_n16384_k2560(std::int32_t tokens);
 [[nodiscard]] Q8Launch select_q8_n34816_k5120(std::int32_t tokens);
+[[nodiscard]] Q8Launch select_q8_n24576_k4096(std::int32_t tokens);
+[[nodiscard]] Q8Launch select_q8_n4096_k12288(std::int32_t tokens);
 [[nodiscard]] Q8Launch select_q8_n248320_k5120(std::int32_t tokens);
 [[nodiscard]] Q8Launch select_q8_n4096_k8192(std::int32_t tokens);
 

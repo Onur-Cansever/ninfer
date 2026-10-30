@@ -46,6 +46,7 @@ void require_weight(const Weight& w, int k) {
 LinearPairLaunch select_linear_pair(int k, int tokens) {
     if (tokens > 0) {
         if (k == 2048) return select_q8_pair_n1024_k2048(tokens);
+        if (k == 4096) return select_q8_pair_n1024_k4096(tokens);
         if (k == 5120) return select_q8_pair_n1024_k5120(tokens);
     }
     throw std::invalid_argument("linear_pair: unsupported shape or token extent");
