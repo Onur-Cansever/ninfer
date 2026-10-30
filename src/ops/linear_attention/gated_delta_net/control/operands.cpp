@@ -56,7 +56,8 @@ Geometry describe_profile(const ProjectionProfile& weights) {
     const auto& a = weights.first;
     require(valid_linear_policy(a.policy), "invalid activation permission");
     if (!weights.second) {
-        bool supported = (a.n == 96 && (a.k == 5120 || a.k == 2560)) || (a.n == 64 && a.k == 2048);
+        bool supported = (a.n == 96 && (a.k == 5120 || a.k == 2560)) || (a.n == 64 && a.k == 2048) ||
+                     (a.n == 64 && a.k == 4096);
 #if NINFER_TARGET_SPARK
         supported = supported || (a.n == 48 && a.k == 2560);
 #endif
@@ -64,10 +65,11 @@ Geometry describe_profile(const ProjectionProfile& weights) {
         return {a.n / 2, a.k};
     }
     const auto& b = *weights.second;
-    require(a.qtype == QType::BF16 && b.qtype == QType::BF16 && a.n == 48 && a.k == 5120 &&
-                b.n == 48 && b.k == 5120,
+    require(a.qtype == QType::BF16 && b.qtype == QType::BF16 &&
+                ((a.n == 48 && a.k == 5120 && b.n == 48 && b.k == 5120) ||
+                 (a.n == 32 && a.k == 4096 && b.n == 32 && b.k == 4096)),
             "unsupported paired geometry");
-    return {48, 5120};
+    return a.n == 48 ? Geometry{48, 5120} : Geometry{32, 4096};
 }
 
 Weights describe_weights(const ProjectionWeights& weights) {
@@ -78,8 +80,8 @@ Weights describe_weights(const ProjectionWeights& weights) {
         return {geometry, &w, nullptr};
     }
     const auto& pair = std::get<PairedProjectionWeights>(weights);
-    describe_matrix(pair.first, 48, 5120);
-    describe_matrix(pair.second, 48, 5120);
+    describe_matrix(pair.first, geometry.heads, geometry.input_rows);
+    describe_matrix(pair.second, geometry.heads, geometry.input_rows);
     return {geometry, &pair.first, &pair.second};
 }
 

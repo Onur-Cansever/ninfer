@@ -16,15 +16,33 @@ class ModelOptNvfp4:
     def __init__(self, store: SafetensorsSource):
         self.store = store
 
+    @staticmethod
+    def _try_describe(store, name):
+        try:
+            return store.describe(name)
+        except ValueError:
+            return None
+
     @lru_cache(maxsize=None)
     def scales(self, prefix: str) -> tuple[bytes, bytes, bytes, bytes]:
         result = []
-        for suffix in ("weight_scale_2", "input_scale"):
-            name = f"{prefix}.{suffix}"
+        suffixes = ("weight_scale_2", "input_scale")
+        seeds = (prefix + "." + s for s in suffixes)
+        # modelopt sürümlerine göre iki isimleme: eski (weight_scale_2/input_scale)
+        # ve yeni (weight_global_scale/input_global_scale).
+        present = [s for s in seeds if self._try_describe(self.store, s) is not None]
+        if len(present) != 2:
+            alt = [prefix + "." + s for s in ("weight_global_scale", "input_global_scale")]
+            present = [s for s in alt if self._try_describe(self.store, s) is not None]
+        if len(present) != 2:
+            raise ValueError(f"{prefix}: modelopt NVFP4 global scales not found (weight_scale_2/input_scale or weight_global_scale/input_global_scale)")
+        for name in present:
             info = self.store.describe(name)
-            if info.dtype != "F32" or info.shape != ():
+            if info.dtype != "F32" or len(info.shape) > 1 or (len(info.shape) == 1 and info.shape[0] != 1):
                 raise ValueError(f"{name}: expected an FP32 scalar multiplier")
             raw = self.store.read_flat(name).view(torch.uint8).numpy().tobytes()
+            if len(raw) != 4:
+                raise ValueError(f"{name}: expected a single FP32 word")
             if not valid_positive_fp32_word(struct.unpack("<I", raw)[0]):
                 raise ValueError(f"{name}: multiplier must be positive finite")
             divisor = struct.pack("<f", 1.0 / struct.unpack("<f", raw)[0])
@@ -39,18 +57,30 @@ class ModelOptNvfp4:
             ("weight", (n, k // 2), "U8"),
             ("weight_scale", (n, k // 16), "F8_E4M3"),
         ):
-            info = self.store.describe(prefix + "." + suffix)
-            if info.shape != dims or info.dtype != dtype:
+            info = self._try_describe(self.store, prefix + "." + suffix)
+            if info is None:
+                # yeni modelopt: akici tensör "weight_packed" olarak adlandirilir
+                if suffix == "weight":
+                    info = self._try_describe(self.store, prefix + ".weight_packed")
+                    if info is None:
+                        raise ValueError(f"{prefix}.{suffix}: unexpected encoded geometry/type")
+                else:
+                    raise ValueError(f"{prefix}.{suffix}: unexpected encoded geometry/type")
+            elif info.shape != dims or info.dtype != dtype:
                 raise ValueError(f"{prefix}.{suffix}: unexpected encoded geometry/type")
-        if k % 16:
-            raise ValueError("ModelOpt NVFP4 requires K divisible by 16")
+
+        packed_suffix = (
+            ".weight_packed"
+            if self._try_describe(self.store, prefix + ".weight_packed") is not None
+            else ".weight"
+        )
         _, dw, _, da = self.scales(prefix)
 
         def encoded(first, last):
             if not 0 <= first < last <= n:
                 raise ValueError("encoded source row range exceeds matrix")
             codes = self.store.read_flat(
-                prefix + ".weight", first * (k // 2), last * (k // 2)
+                prefix + packed_suffix, first * (k // 2), last * (k // 2)
             ).reshape(-1, k // 2)
             scales = (
                 self.store.read_flat(

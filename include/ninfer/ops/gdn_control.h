@@ -52,9 +52,9 @@ void gdn_control(const Tensor& a, const Tensor& b, const Tensor& a_log, const Te
  *
  * Supported domain:
  *   x is contiguous BF16 [K,M]; a_log/dt_bias are FP32 [H]; outputs are FP32 [H,M].
- *   Combined contiguous BF16 parents [2H,K] admit (H,K)=(48,5120),(32,2048),(48,2560).
+ *   Combined contiguous BF16 parents [2H,K] admit (H,K)=(48,5120),(32,2048),(32,4096),(48,2560).
  *   DGX Spark additionally admits (H,K)=(24,2560).
- *   Rows [0,H) are A and [H,2H) are B. Paired BF16 parents [H,K] admit (48,5120).
+ *   Rows [0,H) are A and [H,2H) are B. Paired BF16 parents [H,K] admit (48,5120) and (32,4096).
  *   BF16 x and weight backing must be 16-byte aligned; FP32 backing must be 4-byte aligned.
  *   Every valid activation permission admits this BF16 route. Every positive M is supported
  *   within represented views and available storage. A [K,T,B] block is presented as [K,M],

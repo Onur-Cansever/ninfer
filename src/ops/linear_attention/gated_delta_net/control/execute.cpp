@@ -28,6 +28,9 @@ void execute_projection(const Tensor& x, const Weights& weights, const Tensor& a
     case 2048:
         launch_n64_k2048(in, out, plan, scratch, execution);
         return;
+    case 4096:
+        launch_n64_k4096(in, out, plan, scratch, execution);
+        return;
     case 2560:
 #if NINFER_TARGET_SPARK
         if (weights.geometry.heads == 24) {

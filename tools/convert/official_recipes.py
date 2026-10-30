@@ -187,7 +187,11 @@ def qwen3_8_27b_nvfp4(model, recipe, sources):
 
 
 def qwen3_5_9b_nvfp4(model, recipe, sources):
-    """Qwen3.5-9B: NVIDIA NVFP4 MLP, FP8 projections, direct GDN A/B, matching 27B layout."""
+    """Qwen3.5-9B: NVFP4 where the checkpoint encodes it, plain BF16 elsewhere.
+
+    Mirrors the source layout of axteam/Qwen3.5-9B-NVFP4 (MLP + self-attn
+    projections NVFP4-packed; GDN/DeltaNet projections and norms plain BF16).
+    """
     if "num_experts" in model.config:
         raise ValueError("this official recipe requires Qwen3.5 Dense mathematics")
     _optional(model, recipe)
@@ -196,20 +200,24 @@ def qwen3_5_9b_nvfp4(model, recipe, sources):
     for name, parameter in model.parameters.items():
         if not name.startswith("text/") or name == "text/token_embedding":
             continue
-        source = model.source(name, quantized)
         if not parameter.projection or name.endswith(
             ("/gdn/a_projection", "/gdn/b_projection")
         ):
+            recipe.assign(name, source=model.source(name, quantized))
+            continue
+        # Kaynagin gercek encoding'ini kullan: weight_packed -> nvfp4,
+        # F8_E4M3 -> fp8 row, aksi halde plain BF16 degerler.
+        source = model.source(name, quantized)
+        encoding = source.encoding()
+        if encoding is None:
             recipe.assign(name, source=source)
             continue
-        layer = int(name.split("/")[2]) if name.startswith("text/layers/") else -1
-        format = "nvfp4" if "/mlp/" in name and layer < 32 else FP8
         recipe.assign(
             name,
-            format=format,
+            format=encoding,
             method=import_encoded,
-            source=model.source(name, quantized, format),
-            activation_policy="AllowA4" if format == "nvfp4" else "AllowA8",
+            source=source,
+            activation_policy="AllowA4" if encoding == "nvfp4" else "AllowA8",
         )
 
 

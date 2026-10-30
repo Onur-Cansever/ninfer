@@ -22,6 +22,8 @@ void launch_n96_k5120(const Inputs& in, GdnControlOutputs out, Plan plan, Scratc
                       CudaExecutionView execution);
 void launch_n64_k2048(const Inputs& in, GdnControlOutputs out, Plan plan, Scratch scratch,
                       CudaExecutionView execution);
+void launch_n64_k4096(const Inputs& in, GdnControlOutputs out, Plan plan, Scratch scratch,
+                      CudaExecutionView execution);
 void launch_n96_k2560(const Inputs& in, GdnControlOutputs out, Plan plan, Scratch scratch,
                       CudaExecutionView execution);
 void launch_n48_k2560(const Inputs& in, GdnControlOutputs out, Plan plan, Scratch scratch,
