@@ -82,4 +82,9 @@ void launch_q4_a16_sliced_k2048_t4(const Tensor& x, const Weight& w, Tensor& out
     launch_q4_a16_sliced_instance<q4_instances::SlicedK2048T4>(x, w, out, stream);
 }
 
+void launch_q4_a16_sliced_k4096_t4(const Tensor& x, const Weight& w, Tensor& out,
+                                   cudaStream_t stream) {
+    launch_q4_a16_sliced_instance<q4_instances::SlicedK4096T4>(x, w, out, stream);
+}
+
 } // namespace ninfer::ops::detail
