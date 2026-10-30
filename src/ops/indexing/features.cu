@@ -13,9 +13,18 @@ using namespace common;
 
 namespace {
 
-inline constexpr int kSplitRows  = 14336;
-inline constexpr int kWideRows   = 6144;
-inline constexpr int kNarrowRows = 1024;
+// Packed feature split geometries: source rows are the concatenation of four
+// feature segments (q, k, g, v row counts) and each output is viewed as
+// [head_dim=256, heads, tokens].
+//
+//   27B MoE attention: 14336 = 6144 + 1024 + 6144 + 1024 (24/4 heads)
+//   9B MTP attention:  10240 = 4096 + 1024 + 4096 + 1024 (16/4 heads)
+struct SplitGeometry {
+    int a, b, c, d;
+};
+
+constexpr SplitGeometry geometry27b = {6144, 1024, 6144, 1024};
+constexpr SplitGeometry geometry9b  = {4096, 1024, 4096, 1024};
 
 __global__ void concat_bf16_features_kernel(const __nv_bfloat16* first, const __nv_bfloat16* second,
                                             __nv_bfloat16* out, std::int32_t rows) {
@@ -29,9 +38,11 @@ __global__ void concat_bf16_features_kernel(const __nv_bfloat16* first, const __
     out[out_base + rows + row]  = second[in_idx];
 }
 
+template <int kA, int kB, int kC, int kD>
 __global__ void split_bf16_features_kernel(const __nv_bfloat16* source, __nv_bfloat16* first,
                                            __nv_bfloat16* second, __nv_bfloat16* third,
                                            __nv_bfloat16* fourth, std::int32_t tokens) {
+    constexpr int kSplitRows = kA + kB + kC + kD;
     const std::int64_t idx = blockIdx.x * static_cast<std::int64_t>(blockDim.x) + threadIdx.x;
     const std::int64_t n   = static_cast<std::int64_t>(kSplitRows) * tokens;
     if (idx >= n) { return; }
@@ -40,23 +51,23 @@ __global__ void split_bf16_features_kernel(const __nv_bfloat16* source, __nv_bfl
     const int token           = static_cast<int>(idx / kSplitRows);
     const __nv_bfloat16 value = source[idx];
 
-    if (row < kWideRows) {
-        first[static_cast<std::int64_t>(token) * kWideRows + row] = value;
+    if (row < kA) {
+        first[static_cast<std::int64_t>(token) * kA + row] = value;
         return;
     }
-    if (row < kWideRows + kNarrowRows) {
-        const int local                                                = row - kWideRows;
-        second[static_cast<std::int64_t>(token) * kNarrowRows + local] = value;
+    if (row < kA + kB) {
+        const int local                                             = row - kA;
+        second[static_cast<std::int64_t>(token) * kB + local] = value;
         return;
     }
-    if (row < kWideRows + kNarrowRows + kWideRows) {
-        const int local                                             = row - kWideRows - kNarrowRows;
-        third[static_cast<std::int64_t>(token) * kWideRows + local] = value;
+    if (row < kA + kB + kC) {
+        const int local                                        = row - kA - kB;
+        third[static_cast<std::int64_t>(token) * kC + local] = value;
         return;
     }
 
-    const int local = row - kWideRows - kNarrowRows - kWideRows;
-    fourth[static_cast<std::int64_t>(token) * kNarrowRows + local] = value;
+    const int local = row - kA - kB - kC;
+    fourth[static_cast<std::int64_t>(token) * kD + local] = value;
 }
 
 void concat_bf16_features_launch(const Tensor& first, const Tensor& second, Tensor& out,
@@ -82,10 +93,20 @@ void split_bf16_features_launch(const Tensor& source, Tensor& first, Tensor& sec
     const std::int64_t n = static_cast<std::int64_t>(source.ne[0]) * source.ne[1];
     const int grid =
         static_cast<int>(std::max<std::int64_t>(1, div_up(n, static_cast<std::int64_t>(kBlock))));
-    split_bf16_features_kernel<<<grid, kBlock, 0, stream>>>(
-        static_cast<const __nv_bfloat16*>(source.data), static_cast<__nv_bfloat16*>(first.data),
-        static_cast<__nv_bfloat16*>(second.data), static_cast<__nv_bfloat16*>(third.data),
-        static_cast<__nv_bfloat16*>(fourth.data), source.ne[1]);
+    if (source.ne[0] == 14336) {
+        split_bf16_features_kernel<6144, 1024, 6144, 1024><<<grid, kBlock, 0, stream>>>(
+            static_cast<const __nv_bfloat16*>(source.data), static_cast<__nv_bfloat16*>(first.data),
+            static_cast<__nv_bfloat16*>(second.data), static_cast<__nv_bfloat16*>(third.data),
+            static_cast<__nv_bfloat16*>(fourth.data), source.ne[1]);
+    } else if (source.ne[0] == 10240) {
+        split_bf16_features_kernel<4096, 1024, 4096, 1024><<<grid, kBlock, 0, stream>>>(
+            static_cast<const __nv_bfloat16*>(source.data), static_cast<__nv_bfloat16*>(first.data),
+            static_cast<__nv_bfloat16*>(second.data), static_cast<__nv_bfloat16*>(third.data),
+            static_cast<__nv_bfloat16*>(fourth.data), source.ne[1]);
+    } else {
+        throw std::invalid_argument("split_bf16_features: unsupported source rows " +
+                                    std::to_string(source.ne[0]));
+    }
     CUDA_CHECK(cudaGetLastError());
 }
 
@@ -128,18 +149,22 @@ void split_bf16_features(const Tensor& source, Tensor& first, Tensor& second, Te
     common::operand::contiguous_nonnull(fourth, op, "fourth", execution.device());
     const std::int32_t tokens = source.ne[1];
     if (tokens <= 0) { throw std::invalid_argument("split_bf16_features: T must be positive"); }
-    common::operand::shape(source, {14336, tokens, 1, 1}, op, "source");
-    if (first.ne[0] != 256 || first.ne[1] != 24 || first.ne[2] != tokens || first.ne[3] != 1) {
-        throw std::invalid_argument("split_bf16_features: invalid shape for first");
+    if (source.ne[0] != 14336 && source.ne[0] != 10240) {
+        throw std::invalid_argument("split_bf16_features: unsupported source rows " +
+                                    std::to_string(source.ne[0]));
     }
-    if (second.ne[0] != 256 || second.ne[1] != 4 || second.ne[2] != tokens || second.ne[3] != 1) {
-        throw std::invalid_argument("split_bf16_features: invalid shape for second");
-    }
-    if (third.ne[0] != 256 || third.ne[1] != 24 || third.ne[2] != tokens || third.ne[3] != 1) {
-        throw std::invalid_argument("split_bf16_features: invalid shape for third");
-    }
-    if (fourth.ne[0] != 256 || fourth.ne[1] != 4 || fourth.ne[2] != tokens || fourth.ne[3] != 1) {
-        throw std::invalid_argument("split_bf16_features: invalid shape for fourth");
+    const SplitGeometry geometry = (source.ne[0] == 10240) ? geometry9b : geometry27b;
+    common::operand::shape(source, {static_cast<std::int32_t>(source.ne[0]), tokens, 1, 1}, op, "source");
+    const std::array<Tensor*, 4> outputs = {&first, &second, &third, &fourth};
+    const std::array<int, 4> segment_rows = {geometry.a, geometry.b, geometry.c, geometry.d};
+    constexpr const char* names[4] = {"first", "second", "third", "fourth"};
+    for (int i = 0; i < 4; ++i) {
+        const std::int32_t heads = segment_rows[i] / 256;
+        std::array<std::int32_t, 4> expected{256, heads, tokens, 1};
+        if (outputs[i]->ne[0] != 256 || outputs[i]->ne[1] != heads || outputs[i]->ne[2] != tokens ||
+            outputs[i]->ne[3] != 1) {
+            throw std::invalid_argument(std::string("split_bf16_features: invalid shape for ") + names[i]);
+        }
     }
 
     split_bf16_features_launch(source, first, second, third, fourth, stream);
