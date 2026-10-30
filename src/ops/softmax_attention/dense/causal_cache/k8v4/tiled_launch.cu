@@ -6,8 +6,8 @@
 
 namespace ninfer::ops::detail {
 void k8v4_kv_tiled_attention(const CausalAttentionOperands& p, K8V4KvReadView cache,
-                             CausalKvPartition partition, MemoryArena& workspace,
-                             cudaStream_t stream) {
+                             CausalKvPartition partition, MemoryArena& workspace, cudaStream_t stream,
+                             int kv_heads) {
     auto scope = workspace.scope();
     const auto partial =
         allocate_causal_partials(workspace, p.query_heads, p.width, partition.capacity, 1);
@@ -19,6 +19,8 @@ void k8v4_kv_tiled_attention(const CausalAttentionOperands& p, K8V4KvReadView ca
     };
     if (p.query_heads == 24)
         invoke.template operator()<CausalD256H24Kv4>();
+    else if (kv_heads == 4)
+        invoke.template operator()<CausalD256H16Kv4>();
     else
         invoke.template operator()<CausalD256H16Kv2>();
 }

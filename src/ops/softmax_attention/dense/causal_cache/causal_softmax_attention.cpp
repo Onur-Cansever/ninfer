@@ -32,7 +32,8 @@ constexpr std::int32_t kMaximumBatchSize    = 8;
 void require_causal_geometry(AttentionHeadGeometry geometry, const char* op) {
     if (!valid_attention_head_geometry(geometry) || geometry.head_dim != kHeadDim ||
         !((geometry.query_heads == 24 && geometry.kv_heads == 4) ||
-          (geometry.query_heads == 16 && geometry.kv_heads == 2))) {
+          (geometry.query_heads == 16 && geometry.kv_heads == 2) ||
+          (geometry.query_heads == 16 && geometry.kv_heads == 4))) {
         throw std::invalid_argument(std::string(op) + ": unsupported head geometry");
     }
 }
@@ -190,7 +191,8 @@ std::size_t causal_softmax_attention_workspace_capacity_bytes(
     CausalAttentionExecutionEnvelope envelope, std::int32_t batch_size, std::int32_t min_width,
     std::int32_t max_width, std::int32_t multiprocessor_count) {
     require_causal_geometry(geometry, "causal_softmax_attention workspace");
-    const std::int32_t q_heads = geometry.query_heads;
+    const std::int32_t q_heads  = geometry.query_heads;
+    const std::int32_t kv_heads = geometry.kv_heads;
     bool supported_dtype       = true;
     try {
         (void)paged_kv_storage_layout(cache_storage, kHeadDim);
@@ -205,23 +207,23 @@ std::size_t causal_softmax_attention_workspace_capacity_bytes(
     }
 
     if (cache_storage == KvCacheStorage::BFloat16)
-        return detail::bf16_kv_workspace_bytes(q_heads, batch_size, min_width, max_width, envelope,
-                                               multiprocessor_count);
+        return detail::bf16_kv_workspace_bytes(q_heads, kv_heads, batch_size, min_width, max_width,
+                                               envelope, multiprocessor_count);
 
     if (cache_storage == KvCacheStorage::Fp8E4m3fnGroup128Ue8m0)
-        return detail::fp8_kv_workspace_bytes(q_heads, batch_size, min_width, max_width, envelope,
-                                              multiprocessor_count);
+        return detail::fp8_kv_workspace_bytes(q_heads, kv_heads, batch_size, min_width, max_width,
+                                              envelope, multiprocessor_count);
 
     if (cache_storage == KvCacheStorage::Int8Group64)
-        return detail::int8_kv_workspace_bytes(q_heads, batch_size, min_width, max_width, envelope,
-                                               multiprocessor_count);
+        return detail::int8_kv_workspace_bytes(q_heads, kv_heads, batch_size, min_width, max_width,
+                                               envelope, multiprocessor_count);
 
     if (cache_storage == KvCacheStorage::Nvfp4Group16)
-        return detail::nvfp4_kv_workspace_bytes(q_heads, batch_size, min_width, max_width, envelope,
-                                                multiprocessor_count);
+        return detail::nvfp4_kv_workspace_bytes(q_heads, kv_heads, batch_size, min_width, max_width,
+                                                envelope, multiprocessor_count);
 
-    return detail::k8v4_kv_workspace_bytes(q_heads, batch_size, min_width, max_width, envelope,
-                                           multiprocessor_count);
+    return detail::k8v4_kv_workspace_bytes(q_heads, kv_heads, batch_size, min_width, max_width,
+                                           envelope, multiprocessor_count);
 }
 
 void causal_softmax_attention(const Tensor& q, const Tensor& k, const Tensor& v,

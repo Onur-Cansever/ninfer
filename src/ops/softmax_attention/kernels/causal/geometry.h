@@ -22,4 +22,5 @@ struct CausalGeometry : AttentionHeadMapping<QueryHeads, KVHeads> {
 
 using CausalD256H24Kv4 = CausalGeometry<256, 24, 4>;
 using CausalD256H16Kv2 = CausalGeometry<256, 16, 2>;
+using CausalD256H16Kv4 = CausalGeometry<256, 16, 4>;
 } // namespace ninfer::ops::detail

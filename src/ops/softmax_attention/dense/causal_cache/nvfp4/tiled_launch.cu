@@ -5,9 +5,11 @@
 
 namespace ninfer::ops::detail {
 void nvfp4_kv_tiled_attention(const CausalAttentionOperands& p, Nvfp4KvReadView cache,
-                              cudaStream_t stream) {
+                              cudaStream_t stream, int kv_heads) {
     if (p.query_heads == 24)
         launch_nvfp4_kv_tiled_mma<CausalD256H24Kv4, Nvfp4KvTiledInstance>(p, cache, stream);
+    else if (kv_heads == 4)
+        launch_nvfp4_kv_tiled_mma<CausalD256H16Kv4, Nvfp4KvTiledInstance>(p, cache, stream);
     else
         launch_nvfp4_kv_tiled_mma<CausalD256H16Kv2, Nvfp4KvTiledInstance>(p, cache, stream);
 }

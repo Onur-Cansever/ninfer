@@ -11,6 +11,7 @@ struct Bf16KvCausalPlan {
     Bf16KvInstance instance;
     Bf16KvPartition partition;
     int query_heads;
+    int kv_heads;
     int width;
     int batch;
     CausalAttentionExecutionEnvelope envelope;
@@ -18,11 +19,11 @@ struct Bf16KvCausalPlan {
     bool grouped() const { return bf16_kv_instance_description(instance).grouped; }
 };
 
-Bf16KvCausalPlan select_bf16_kv_causal_plan(int query_heads, int width, int batch,
+Bf16KvCausalPlan select_bf16_kv_causal_plan(int query_heads, int kv_heads, int width, int batch,
                                             CausalAttentionExecutionEnvelope envelope,
                                             int multiprocessor_count);
-std::size_t bf16_kv_workspace_bytes(int query_heads, int batch, int min_width, int max_width,
-                                    CausalAttentionExecutionEnvelope envelope,
+std::size_t bf16_kv_workspace_bytes(int query_heads, int kv_heads, int batch, int min_width,
+                                    int max_width, CausalAttentionExecutionEnvelope envelope,
                                     int multiprocessor_count);
 
 kv::PagedWriteInstance select_bf16_kv_write(int heads);

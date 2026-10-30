@@ -56,8 +56,10 @@ void tiled(const CausalAttentionOperands& p, Bf16KvReadView cache, const Bf16KvC
                 G, typename Bf16KvInstanceTraits<Bf16KvInstance::Tiled64>::Schedule>(p, cache,
                                                                                      stream);
     };
-    if (p.query_heads == 24)
+    if (plan.query_heads == 24)
         invoke.template operator()<CausalD256H24Kv4>();
+    else if (plan.kv_heads == 4)
+        invoke.template operator()<CausalD256H16Kv4>();
     else
         invoke.template operator()<CausalD256H16Kv2>();
 }
@@ -73,8 +75,10 @@ void execute_grouped(const Tensor& q, Input input, const Tensor& positions, floa
     const auto p = make_causal_operands(q, positions, out, scale, plan.envelope.max_visible_keys);
     const auto view    = bf16_kv_cache_view<Input::writes_cache>(cache, valid, rows);
     const auto partial = storage.view();
-    if (p.query_heads == 24)
+    if (plan.query_heads == 24)
         grouped_instance<CausalD256H24Kv4>(p, view, input, plan, partial, stream);
+    else if (plan.kv_heads == 4)
+        grouped_instance<CausalD256H16Kv4>(p, view, input, plan, partial, stream);
     else
         grouped_instance<CausalD256H16Kv2>(p, view, input, plan, partial, stream);
 }
@@ -86,8 +90,8 @@ void bf16_kv_append_attention(const Tensor& q, const Tensor& k, const Tensor& v,
                               CausalAttentionExecutionEnvelope envelope, MemoryArena& workspace,
                               Tensor& out, CudaExecutionView execution) {
     const cudaStream_t stream = execution.stream();
-    const auto plan           = select_bf16_kv_causal_plan(q.ne[1], q.ne[2], q.ne[3], envelope,
-                                                           execution.multiprocessor_count());
+    const auto plan           = select_bf16_kv_causal_plan(q.ne[1], k.ne[1], q.ne[2], q.ne[3],
+                                                           envelope, execution.multiprocessor_count());
     if (!plan.grouped()) {
         kv::launch_paged_write(select_bf16_kv_write(k.ne[1]), k, v, positions, valid_columns,
                                table_rows, cache, stream);
@@ -107,8 +111,8 @@ void bf16_kv_cached_attention(const Tensor& q, const Tensor& positions, float sc
                               CausalAttentionExecutionEnvelope envelope, MemoryArena& workspace,
                               Tensor& out, CudaExecutionView execution) {
     const cudaStream_t stream = execution.stream();
-    const auto plan =
-        select_bf16_kv_causal_plan(q.ne[1], q.ne[2], 1, envelope, execution.multiprocessor_count());
+    const auto plan = select_bf16_kv_causal_plan(q.ne[1], cache.num_kv_heads, q.ne[2], 1, envelope,
+                                                 execution.multiprocessor_count());
     const auto view = single_row_paged_kv_batch_view(cache);
     if (!plan.grouped()) {
         tiled(make_causal_operands(q, positions, out, scale, envelope.max_visible_keys),

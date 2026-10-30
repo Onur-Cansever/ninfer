@@ -5,5 +5,5 @@
 
 namespace ninfer::ops::detail {
 void k8v4_kv_tiled_attention(const CausalAttentionOperands&, K8V4KvReadView, CausalKvPartition,
-                             MemoryArena&, cudaStream_t);
+                             MemoryArena&, cudaStream_t, int kv_heads);
 } // namespace ninfer::ops::detail

@@ -63,13 +63,14 @@ std::size_t tiled_workspace_bytes(int heads, int min_width, int max_width, int v
 
 } // namespace
 
-K8V4KvCausalPlan select_k8v4_kv_causal_plan(int heads, int width, int batch,
+K8V4KvCausalPlan select_k8v4_kv_causal_plan(int heads, int kv_heads, int width, int batch,
                                             CausalAttentionExecutionEnvelope envelope,
                                             int multiprocessor_count) {
     if (multiprocessor_count <= 0 || (heads != 24 && heads != 16) || width < 1 || batch < 1 ||
         batch > 8 || (batch > 1 && width > 16) || envelope.min_visible_keys == 0 ||
         envelope.min_visible_keys > envelope.max_visible_keys ||
-        envelope.max_visible_keys > kCausalAttentionMaximumVisibleKeys)
+        envelope.max_visible_keys > kCausalAttentionMaximumVisibleKeys ||
+        !((heads == 24 && kv_heads == 4) || (heads == 16 && (kv_heads == 2 || kv_heads == 4))))
         throw std::invalid_argument("K8V4 attention: invalid plan inputs");
     constexpr int grouped_limit = K8V4KvCausalPlan::kTokenTile;
     const auto family           = width <= grouped_limit             ? K8V4KvFamily::Grouped
@@ -79,6 +80,7 @@ K8V4KvCausalPlan select_k8v4_kv_causal_plan(int heads, int width, int batch,
         return {
             family,
             heads,
+            kv_heads,
             width,
             batch,
             0,
@@ -89,7 +91,7 @@ K8V4KvCausalPlan select_k8v4_kv_causal_plan(int heads, int width, int batch,
     const int query_tile        = family == K8V4KvFamily::ParallelGrouped && width <= 16
                                       ? (width + 1) / 2
                                       : std::min(width, grouped_limit);
-    const int independent_tiles = batch * (heads == 24 ? 4 : 2) * tiles;
+    const int independent_tiles = batch * kv_heads * tiles;
     // Decode budgets two CTAs per SM; wider queries start with one and double the
     // budget if complete query-tile groups would leave over 10% of the SMs idle.
     const std::int64_t sms = multiprocessor_count;
@@ -101,16 +103,16 @@ K8V4KvCausalPlan select_k8v4_kv_causal_plan(int heads, int width, int batch,
     // Bound partial traffic by keeping enough KV work in each split.
     partition.key_shift = (width == 1 ? 7 : 8) - (heads == 16 ? 1 : 0);
     partition.capacity  = partition.active(envelope.max_visible_keys);
-    return {family, heads, width, batch, query_tile, envelope, partition};
+    return {family, heads, kv_heads, width, batch, query_tile, envelope, partition};
 }
 
-std::size_t k8v4_kv_workspace_bytes(int heads, int batch, int min_width, int max_width,
+std::size_t k8v4_kv_workspace_bytes(int heads, int kv_heads, int batch, int min_width, int max_width,
                                     CausalAttentionExecutionEnvelope envelope,
                                     int multiprocessor_count) {
     std::size_t maximum = 0;
     for (int width = min_width; width <= std::min(max_width, kGroupedPrefillMaxWidth); ++width) {
         const auto plan =
-            select_k8v4_kv_causal_plan(heads, width, batch, envelope, multiprocessor_count);
+            select_k8v4_kv_causal_plan(heads, kv_heads, width, batch, envelope, multiprocessor_count);
         if (plan.family == K8V4KvFamily::Tiled) continue;
         const int splits = plan.partition.capacity;
         WorkspaceLayoutBuilder layout;

@@ -2,5 +2,6 @@
 #include "ops/softmax_attention/kernels/causal/operands.h"
 
 namespace ninfer::ops::detail {
-void nvfp4_kv_tiled_attention(const CausalAttentionOperands&, Nvfp4KvReadView, cudaStream_t);
+void nvfp4_kv_tiled_attention(const CausalAttentionOperands&, Nvfp4KvReadView, cudaStream_t,
+                              int kv_heads);
 } // namespace ninfer::ops::detail
