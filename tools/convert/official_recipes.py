@@ -186,6 +186,33 @@ def qwen3_8_27b_nvfp4(model, recipe, sources):
         )
 
 
+def qwen3_5_9b_nvfp4(model, recipe, sources):
+    """Qwen3.5-9B: NVIDIA NVFP4 MLP, FP8 projections, direct GDN A/B, matching 27B layout."""
+    if "num_experts" in model.config:
+        raise ValueError("this official recipe requires Qwen3.5 Dense mathematics")
+    _optional(model, recipe)
+    quantized = sources["quantized"]
+    recipe.assign("text/token_embedding", format=FP8, method=fp8_row_maxabs)
+    for name, parameter in model.parameters.items():
+        if not name.startswith("text/") or name == "text/token_embedding":
+            continue
+        source = model.source(name, quantized)
+        if not parameter.projection or name.endswith(
+            ("/gdn/a_projection", "/gdn/b_projection")
+        ):
+            recipe.assign(name, source=source)
+            continue
+        layer = int(name.split("/")[2]) if name.startswith("text/layers/") else -1
+        format = "nvfp4" if "/mlp/" in name and layer < 32 else FP8
+        recipe.assign(
+            name,
+            format=format,
+            method=import_encoded,
+            source=model.source(name, quantized, format),
+            activation_policy="AllowA4" if format == "nvfp4" else "AllowA8",
+        )
+
+
 def qwen3_8_flash_next(model, recipe, sources):
     """Qwen4Exp: NVIDIA NVFP4/FP8 expert banks, Q8 projections and paged NF4 PLE."""
     recipe.provenance.update(
@@ -539,6 +566,7 @@ RECIPES = {
     "qwen3_6_27b_nvfp4": qwen3_6_27b_nvfp4,
     "qwen3_8_27b": qwen3_8_27b,
     "qwen3_8_27b_nvfp4": qwen3_8_27b_nvfp4,
+    "qwen3_5_9b_nvfp4": qwen3_5_9b_nvfp4,
     "qwen3_6_35b_a3b": qwen3_6_35b_a3b,
     "qwen3_8_flash_next": qwen3_8_flash_next,
 }
