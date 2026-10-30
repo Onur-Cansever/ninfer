@@ -4,6 +4,10 @@ namespace ninfer::ops::detail {
 namespace {
 Nvfp4LinearAddPlan select_plan(std::int32_t rows, std::int32_t k, LinearPolicy policy,
                                std::int32_t tokens) {
+    if (tokens > 0 && rows == 4096) {
+        if (k == 4096) return select_nvfp4_add_n4096_k4096(policy, tokens);
+        if (k == 12288) return select_nvfp4_add_n4096_k12288(policy, tokens);
+    }
     if (tokens > 0 && rows == 5120) {
         if (k == 6144) return select_nvfp4_add_n5120_k6144(policy, tokens);
         if (k == 17408) return select_nvfp4_add_n5120_k17408(policy, tokens);

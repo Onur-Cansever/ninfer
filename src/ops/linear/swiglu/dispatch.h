@@ -13,6 +13,7 @@ using LinearSwiGluLaunch = void (*)(const Tensor&, const Weight&, Tensor&, cudaS
 LinearSwiGluLaunch select_q8_linear_swiglu(int rows, int k, int tokens);
 LinearSwiGluLaunch select_q8_swiglu_n12288_k2048(int tokens);
 LinearSwiGluLaunch select_q8_swiglu_n34816_k5120(int tokens);
+LinearSwiGluLaunch select_q8_swiglu_n24576_k4096(int tokens);
 void q8_linear_swiglu_dispatch(const Tensor&, const Weight&, Tensor&, float limit, bool clamped,
                                cudaStream_t);
 void launch_q8_swiglu_n2048_k4096(const Tensor&, const Weight&, Tensor&, float limit, bool clamped,

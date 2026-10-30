@@ -48,10 +48,7 @@ void launch_mma(const Tensor& x, const Weight& w, Tensor& out, cudaStream_t stre
 }
 } // namespace
 
-LinearAddLaunch select_q4_linear_add(std::int32_t rows, std::int32_t k, std::int32_t tokens) {
-    if (rows != 5120 || k != 6144 || tokens <= 0) {
-        throw std::invalid_argument("q4 linear_add: unsupported shape or token extent");
-    }
+LinearAddLaunch select_q4_linear_add_n5120_k6144(std::int32_t tokens) {
     if (tokens == 1) return launch_gemv<GemvR1W8>;
     if (tokens <= 4) return launch_sliced<4>;
     if (tokens <= 8) return launch_sliced<8>;
@@ -61,6 +58,15 @@ LinearAddLaunch select_q4_linear_add(std::int32_t rows, std::int32_t k, std::int
     if (tokens <= 96) return launch_mma<MmaR32T32>;
     if (tokens <= 192) return launch_mma<MmaR32T64>;
     return launch_mma<MmaR64T128>;
+}
+
+LinearAddLaunch select_q4_linear_add(std::int32_t rows, std::int32_t k, std::int32_t tokens) {
+    if (tokens > 0) {
+        if (rows == 5120 && k == 6144) return select_q4_linear_add_n5120_k6144(tokens);
+        if (rows == 4096 && k == 4096) return select_q4_linear_add_n4096_k4096(tokens);
+        if (rows == 4096 && k == 12288) return select_q4_linear_add_n4096_k12288(tokens);
+    }
+    throw std::invalid_argument("q4 linear_add: unsupported shape or token extent");
 }
 
 } // namespace ninfer::ops::detail

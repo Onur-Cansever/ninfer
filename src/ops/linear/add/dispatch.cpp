@@ -7,6 +7,8 @@ LinearAddLaunch select_q5_linear_add(std::int32_t rows, std::int32_t k, std::int
     if (tokens > 0) {
         if (rows == 5120 && k == 6144) return select_q5_linear_add_n5120_k6144(tokens);
         if (rows == 5120 && k == 17408) return select_q5_linear_add_n5120_k17408(tokens);
+        if (rows == 4096 && k == 4096) return select_q5_linear_add_n4096_k4096(tokens);
+        if (rows == 4096 && k == 12288) return select_q5_linear_add_n4096_k12288(tokens);
     }
     throw std::invalid_argument("q5 linear_add: unsupported shape or token extent");
 }
@@ -17,6 +19,8 @@ LinearAddLaunch select_q8_linear_add(std::int32_t rows, std::int32_t k, std::int
         if (rows == 2048 && k == 6144) return select_q8_linear_add_n2048_k6144(tokens);
         if (rows == 5120 && k == 6144) return select_q8_linear_add_n5120_k6144(tokens);
         if (rows == 5120 && k == 17408) return select_q8_linear_add_n5120_k17408(tokens);
+        if (rows == 4096 && k == 4096) return select_q8_linear_add_n4096_k4096(tokens);
+        if (rows == 4096 && k == 12288) return select_q8_linear_add_n4096_k12288(tokens);
     }
     throw std::invalid_argument("q8 linear_add: unsupported shape or token extent");
 }
