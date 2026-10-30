@@ -10,7 +10,7 @@ namespace ninfer::ops::detail {
 namespace {
 
 using GemvR1W8 =
-    Q4A16GemvSchedule<1, 8, 16, 1, Q4GemvActivationAccess::Direct, Q4GemvLaneMapping::PackedByte2,
+    Q4A16GemvSchedule<1, 8, 32, 1, Q4GemvActivationAccess::Direct, Q4GemvLaneMapping::PackedByte2,
                       Q4GemvDecodeMode::ScalarInteger, Q4GemvCodeTransfer::SyncVector16,
                       Q4GemvScaleAccess::Scalar16Shuffle, Cache::ca, 12288 / 64, 1>;
 using MmaR32T32  = Q4A16MmaSchedule<32, 32, 64, 16, 16, 3, 2, Q4MmaFragmentPipeline::Serial,
